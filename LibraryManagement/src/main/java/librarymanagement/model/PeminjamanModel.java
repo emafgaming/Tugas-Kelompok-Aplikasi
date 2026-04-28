@@ -483,6 +483,52 @@ public class PeminjamanModel {
             return -1;
         }
     }
+
+    /**
+     * Hapus riwayat transaksi yang sudah selesai.
+     * Hanya diizinkan untuk status final: Kembali, Terlambat, atau Hilang.
+     */
+    public boolean deleteRiwayatPeminjaman(int idPinjam) {
+        Connection conn = getConn();
+        try {
+            PeminjamanModel pinjam = getPeminjamanById(idPinjam);
+            if (pinjam == null) {
+                return false;
+            }
+
+            String status = pinjam.getStatus();
+            if (!"Kembali".equals(status) && !"Terlambat".equals(status) && !"Hilang".equals(status)) {
+                return false;
+            }
+
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement psDetail = conn.prepareStatement(
+                    "DELETE FROM detail_peminjaman WHERE id_pinjam = ?")) {
+                psDetail.setInt(1, idPinjam);
+                psDetail.executeUpdate();
+            }
+
+            try (PreparedStatement psPeminjaman = conn.prepareStatement(
+                    "DELETE FROM peminjaman WHERE id_pinjam = ?")) {
+                psPeminjaman.setInt(1, idPinjam);
+                psPeminjaman.executeUpdate();
+            }
+
+            conn.commit();
+            conn.setAutoCommit(true);
+            return true;
+        } catch (SQLException e) {
+            try {
+                conn.rollback();
+                conn.setAutoCommit(true);
+            } catch (SQLException ex) {
+                System.err.println("Error rollback deleteRiwayatPeminjaman: " + ex.getMessage());
+            }
+            System.err.println("Error deleteRiwayatPeminjaman: " + e.getMessage());
+            return false;
+        }
+    }
     
     /**
      * Cek apakah anggota memiliki peminjaman aktif (belum dikembalikan)

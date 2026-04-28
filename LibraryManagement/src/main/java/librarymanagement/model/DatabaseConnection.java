@@ -130,6 +130,9 @@ public class DatabaseConnection {
             "FOREIGN KEY (id_buku) REFERENCES buku(id_buku))"
         );
         stmt.close();
+
+        // Migrasi ringan untuk database lama yang belum memiliki kolom foto PDF anggota
+        addColumnIfMissing("anggota", "foto_pdf_path", "TEXT");
         
         // Bersihkan duplikasi nama anggota yang sudah ada
         cleanupDuplicateAnggota();
@@ -152,6 +155,35 @@ public class DatabaseConnection {
         }
         
         System.out.println(">>> Tabel berhasil dibuat/diverifikasi.");
+    }
+
+    private void addColumnIfMissing(String tableName, String columnName, String columnDefinition) {
+        if (columnExists(tableName, columnName)) {
+            return;
+        }
+
+        String sql = "ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnDefinition;
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+            System.out.println(">>> Kolom baru ditambahkan: " + tableName + "." + columnName);
+        } catch (SQLException e) {
+            System.err.println("Warning: gagal menambah kolom " + tableName + "." + columnName + ": " + e.getMessage());
+        }
+    }
+
+    private boolean columnExists(String tableName, String columnName) {
+        String sql = "PRAGMA table_info(" + tableName + ")";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                if (columnName.equalsIgnoreCase(rs.getString("name"))) {
+                    return true;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Warning: gagal memeriksa kolom " + tableName + "." + columnName + ": " + e.getMessage());
+        }
+        return false;
     }
     
     /**

@@ -240,13 +240,13 @@ public class Dashboard extends JFrame {
         kartuAnggotaPanel = new KartuAnggotaPanel();
         formKontakDeveloper = new FormKontakDeveloper();
         
-        contentPanel.add(formBuku, "buku");
-        contentPanel.add(formKategori, "kategori");
-        contentPanel.add(formAnggota, "anggota");
-        contentPanel.add(formPeminjaman, "peminjaman");
-        contentPanel.add(panelLaporan, "laporan");
-        contentPanel.add(kartuAnggotaPanel, "kartu");
-        contentPanel.add(formKontakDeveloper, "kontak");
+        contentPanel.add(wrapScrollablePanel(formBuku), "buku");
+        contentPanel.add(wrapScrollablePanel(formKategori), "kategori");
+        contentPanel.add(wrapScrollablePanel(formAnggota), "anggota");
+        contentPanel.add(wrapScrollablePanel(formPeminjaman), "peminjaman");
+        contentPanel.add(wrapScrollablePanel(panelLaporan), "laporan");
+        contentPanel.add(wrapScrollablePanel(kartuAnggotaPanel), "kartu");
+        contentPanel.add(wrapScrollablePanel(formKontakDeveloper), "kontak");
         
         // Disable CRUD buttons untuk demo user
         if (currentUser.isDemo()) {
@@ -311,6 +311,17 @@ public class Dashboard extends JFrame {
         lbl.setForeground(new Color(80, 105, 140));
         panel.add(lbl);
         return panel;
+    }
+
+    private JScrollPane wrapScrollablePanel(JComponent panel) {
+        JScrollPane scrollPane = new JScrollPane(panel);
+        scrollPane.setBorder(null);
+        scrollPane.getViewport().setBackground(COLOR_BG);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(16);
+        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        return scrollPane;
     }
     
     /**
@@ -623,6 +634,9 @@ public class Dashboard extends JFrame {
         
         // Disable di FormPeminjaman
         disableButtonsInPanel(formPeminjaman, "Pinjam", "Kembalikan", "Bersihkan");
+
+        // Disable aksi transaksi di PanelLaporan
+        disableButtonsInPanel(panelLaporan, "Kembalikan", "Terlambat", "Hilang", "Hapus Riwayat");
     }
     
     /**

@@ -82,6 +82,7 @@ librarymanagement\util\KeyboardShortcutUtil.class
 librarymanagement\util\RealTimeValidationUtil$3.class
 librarymanagement\util\TableDoubleClickUtil$1.class
 librarymanagement\view\FormKategori$6.class
+librarymanagement\util\AnggotaPhotoUtil.class
 librarymanagement\util\KeyboardShortcutUtil$3.class
 librarymanagement\util\TableDoubleClickUtil$DoubleClickCallback.class
 com\ezzar\librarymanagement\LibraryManagement.class
@@ -95,6 +96,7 @@ librarymanagement\util\TableUtil$1.class
 librarymanagement\util\ToastUtil$1.class
 librarymanagement\view\FormAnggota.class
 librarymanagement\view\PanelLaporan$5.class
+librarymanagement\view\FormAnggota$7.class
 librarymanagement\util\TableDoubleClickUtil.class
 librarymanagement\view\PanelLaporan.class
 librarymanagement\controller\AnggotaController.class
@@ -109,6 +111,7 @@ librarymanagement\controller\PeminjamanController.class
 librarymanagement\model\UserModel.class
 librarymanagement\view\FormBuku$2.class
 librarymanagement\view\LoginForm$4.class
+librarymanagement\view\FormAnggota$FotoPreviewPanel.class
 librarymanagement\view\FormPeminjaman$2.class
 librarymanagement\util\ToastUtil$2.class
 librarymanagement\view\FormAnggota$6.class

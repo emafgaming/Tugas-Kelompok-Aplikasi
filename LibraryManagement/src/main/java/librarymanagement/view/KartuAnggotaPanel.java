@@ -2,23 +2,37 @@ package librarymanagement.view;
 
 import librarymanagement.controller.LoginController;
 import librarymanagement.model.AnggotaModel;
+import librarymanagement.util.AnggotaPhotoUtil;
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.awt.print.*;
+import java.awt.geom.RoundRectangle2D;
 import java.io.File;
 import java.util.List;
 import javax.imageio.ImageIO;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.event.PopupMenuEvent;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 /**
  * KartuAnggotaPanel - Panel untuk membuat dan mencetak kartu anggota
  * Desain seperti KTP (85.6mm x 53.98mm)
  */
 public class KartuAnggotaPanel extends JPanel {
+
+    private static final double KTP_WIDTH_MM = 85.6;
+    private static final double KTP_HEIGHT_MM = 53.98;
+    private static final int CARD_WIDTH = (int) Math.round(KTP_WIDTH_MM * 6.0);
+    private static final int CARD_HEIGHT = (int) Math.round(KTP_HEIGHT_MM * 6.0);
     
     private JComboBox<AnggotaModel> cmbAnggota;
     private KartuPreviewPanel kartuPreview;
@@ -152,7 +166,7 @@ public class KartuAnggotaPanel extends JPanel {
     private void previewKartu() {
         Object sel = cmbAnggota.getSelectedItem();
         if (sel instanceof AnggotaModel) {
-            selectedAnggota = (AnggotaModel) sel;
+            selectedAnggota = anggotaModel.getAnggotaById(((AnggotaModel) sel).getIdAnggota());
             kartuPreview.setAnggota(selectedAnggota);
         } else {
             JOptionPane.showMessageDialog(this, "Pilih anggota terlebih dahulu!", 
@@ -168,6 +182,7 @@ public class KartuAnggotaPanel extends JPanel {
         }
         
         PrinterJob job = PrinterJob.getPrinterJob();
+        PageFormat ktpPageFormat = job.validatePage(createKtpPageFormat());
         job.setPrintable((graphics, pageFormat, pageIndex) -> {
             if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
             
@@ -175,24 +190,31 @@ public class KartuAnggotaPanel extends JPanel {
             g2.translate(pageFormat.getImageableX(), pageFormat.getImageableY());
             
             // Scale kartu ke halaman
-            double scaleX = pageFormat.getImageableWidth() / 540.0;
-            double scaleY = pageFormat.getImageableHeight() / 340.0;
+            double scaleX = pageFormat.getImageableWidth() / CARD_WIDTH;
+            double scaleY = pageFormat.getImageableHeight() / CARD_HEIGHT;
             double scale = Math.min(scaleX, scaleY);
             g2.scale(scale, scale);
             
-            kartuPreview.drawKartu(g2, 540, 340);
+            kartuPreview.drawKartu(g2, CARD_WIDTH, CARD_HEIGHT);
             return Printable.PAGE_EXISTS;
-        });
+        }, ktpPageFormat);
         
-        if (job.printDialog()) {
-            try {
-                job.print();
-                JOptionPane.showMessageDialog(this, "Kartu berhasil dicetak!", 
-                    "Sukses", JOptionPane.INFORMATION_MESSAGE);
-            } catch (PrinterException e) {
-                JOptionPane.showMessageDialog(this, "Gagal mencetak: " + e.getMessage(), 
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            }
+        if (!job.printDialog()) {
+            return;
+        }
+
+        if (isPdfPrinter(job)) {
+            exportExactSizePdf();
+            return;
+        }
+
+        try {
+            job.print();
+            JOptionPane.showMessageDialog(this, "Kartu berhasil dicetak!", 
+                "Sukses", JOptionPane.INFORMATION_MESSAGE);
+        } catch (PrinterException e) {
+            JOptionPane.showMessageDialog(this, "Gagal mencetak: " + e.getMessage(), 
+                "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
     
@@ -204,21 +226,29 @@ public class KartuAnggotaPanel extends JPanel {
         }
         
         JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new File("Kartu_" + selectedAnggota.getNama().replace(" ", "_") + ".png"));
+        chooser.setDialogTitle("Simpan Kartu Anggota");
+        chooser.setAcceptAllFileFilterUsed(false);
+        FileNameExtensionFilter pdfFilter = new FileNameExtensionFilter("PDF File", "pdf");
+        FileNameExtensionFilter pngFilter = new FileNameExtensionFilter("PNG Image", "png");
+        chooser.addChoosableFileFilter(pdfFilter);
+        chooser.addChoosableFileFilter(pngFilter);
+        chooser.setFileFilter(pdfFilter);
+        chooser.setSelectedFile(new File("Kartu_" + selectedAnggota.getNama().replace(" ", "_") + ".pdf"));
         int result = chooser.showSaveDialog(this);
         
         if (result == JFileChooser.APPROVE_OPTION) {
             try {
-                BufferedImage img = new BufferedImage(540, 340, BufferedImage.TYPE_INT_ARGB);
-                Graphics2D g2 = img.createGraphics();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-                kartuPreview.drawKartu(g2, 540, 340);
-                g2.dispose();
-                
-                ImageIO.write(img, "png", chooser.getSelectedFile());
+                BufferedImage img = renderKartuImage();
+                File targetFile = ensureSelectedExtension(chooser.getSelectedFile(), chooser.getFileFilter());
+
+                if (targetFile.getName().toLowerCase().endsWith(".pdf")) {
+                    saveAsPdf(targetFile, img);
+                } else {
+                    ImageIO.write(img, "png", targetFile);
+                }
+
                 JOptionPane.showMessageDialog(this, 
-                    "Kartu berhasil disimpan!\n" + chooser.getSelectedFile().getAbsolutePath(), 
+                    "Kartu berhasil disimpan!\n" + targetFile.getAbsolutePath(), 
                     "Sukses", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception e) {
                 JOptionPane.showMessageDialog(this, "Gagal menyimpan: " + e.getMessage(), 
@@ -280,6 +310,101 @@ public class KartuAnggotaPanel extends JPanel {
         btn.setFocusPainted(false);
         return btn;
     }
+
+    private PageFormat createKtpPageFormat() {
+        double widthPoints = mmToPoints(KTP_WIDTH_MM);
+        double heightPoints = mmToPoints(KTP_HEIGHT_MM);
+
+        Paper paper = new Paper();
+        paper.setSize(widthPoints, heightPoints);
+        paper.setImageableArea(0, 0, widthPoints, heightPoints);
+
+        PageFormat pageFormat = new PageFormat();
+        pageFormat.setPaper(paper);
+        pageFormat.setOrientation(PageFormat.PORTRAIT);
+        return pageFormat;
+    }
+
+    private double mmToPoints(double mm) {
+        return (mm / 25.4) * 72.0;
+    }
+
+    private BufferedImage renderKartuImage() {
+        BufferedImage img = new BufferedImage(CARD_WIDTH, CARD_HEIGHT, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = img.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        kartuPreview.drawKartu(g2, CARD_WIDTH, CARD_HEIGHT);
+        g2.dispose();
+        return img;
+    }
+
+    private File ensureSelectedExtension(File file, javax.swing.filechooser.FileFilter filter) {
+        String name = file.getName().toLowerCase();
+        if (filter instanceof FileNameExtensionFilter) {
+            String[] extensions = ((FileNameExtensionFilter) filter).getExtensions();
+            if (extensions.length > 0 && !name.endsWith("." + extensions[0].toLowerCase())) {
+                return new File(file.getParentFile(), file.getName() + "." + extensions[0]);
+            }
+        }
+        return file;
+    }
+
+    private void saveAsPdf(File file, BufferedImage image) throws Exception {
+        float widthPoints = (float) mmToPoints(KTP_WIDTH_MM);
+        float heightPoints = (float) mmToPoints(KTP_HEIGHT_MM);
+
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(new PDRectangle(widthPoints, heightPoints));
+            document.addPage(page);
+
+            PDImageXObject pdImage = LosslessFactory.createFromImage(document, image);
+            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+                contentStream.drawImage(pdImage, 0, 0, widthPoints, heightPoints);
+            }
+
+            document.save(file);
+        }
+    }
+
+    private boolean isPdfPrinter(PrinterJob job) {
+        if (job == null || job.getPrintService() == null) {
+            return false;
+        }
+
+        String printerName = job.getPrintService().getName().toLowerCase(java.util.Locale.ROOT);
+        return printerName.contains("pdf");
+    }
+
+    private void exportExactSizePdf() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Simpan Kartu Anggota Sebagai PDF");
+        chooser.setAcceptAllFileFilterUsed(false);
+
+        FileNameExtensionFilter pdfFilter = new FileNameExtensionFilter("PDF File", "pdf");
+        chooser.addChoosableFileFilter(pdfFilter);
+        chooser.setFileFilter(pdfFilter);
+        chooser.setSelectedFile(new File("Kartu_" + selectedAnggota.getNama().replace(" ", "_") + ".pdf"));
+
+        int result = chooser.showSaveDialog(this);
+        if (result != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        try {
+            BufferedImage image = renderKartuImage();
+            File targetFile = ensureSelectedExtension(chooser.getSelectedFile(), chooser.getFileFilter());
+            saveAsPdf(targetFile, image);
+
+            JOptionPane.showMessageDialog(this,
+                "Printer PDF terdeteksi.\nKartu disimpan sebagai PDF ukuran KTP tanpa area putih tambahan.\n"
+                    + targetFile.getAbsolutePath(),
+                "Sukses", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Gagal menyimpan PDF: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
     
     // ============================================================
     // INNER CLASS: Preview Kartu (ukuran KTP)
@@ -287,14 +412,18 @@ public class KartuAnggotaPanel extends JPanel {
     private class KartuPreviewPanel extends JPanel {
         
         private AnggotaModel anggota;
+        private BufferedImage fotoPdfPreview;
         
         public KartuPreviewPanel() {
-            setPreferredSize(new Dimension(540, 340));
+            setPreferredSize(new Dimension(CARD_WIDTH, CARD_HEIGHT));
             setBackground(COLOR_BG);
         }
         
         public void setAnggota(AnggotaModel anggota) {
             this.anggota = anggota;
+            this.fotoPdfPreview = anggota != null
+                ? AnggotaPhotoUtil.renderPdfFirstPage(anggota.getFotoPdfPath(), 95, 120)
+                : null;
             repaint();
         }
         
@@ -308,12 +437,12 @@ public class KartuAnggotaPanel extends JPanel {
             if (anggota == null) {
                 // Placeholder
                 g2.setColor(new Color(220, 225, 230));
-                g2.fillRoundRect(0, 0, 540, 340, 12, 12);
+                g2.fillRoundRect(0, 0, CARD_WIDTH, CARD_HEIGHT, 12, 12);
                 g2.setColor(new Color(150, 160, 170));
                 g2.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-                g2.drawString("Pilih anggota dan klik Preview untuk melihat kartu", 80, 175);
+                g2.drawString("Pilih anggota dan klik Preview untuk melihat kartu", 65, CARD_HEIGHT / 2 + 10);
             } else {
-                drawKartu(g2, 540, 340);
+                drawKartu(g2, CARD_WIDTH, CARD_HEIGHT);
             }
             
             g2.dispose();
@@ -407,15 +536,21 @@ public class KartuAnggotaPanel extends JPanel {
             g2.setColor(new Color(100, 140, 180));
             g2.setStroke(new BasicStroke(1.5f));
             g2.drawRoundRect(fotoX, fotoY, fotoW, fotoH, 8, 8);
-            
-            // Silhouette icon
-            g2.setColor(new Color(80, 120, 160));
-            g2.fillOval(fotoX + 30, fotoY + 15, 35, 35);
-            g2.fillRoundRect(fotoX + 18, fotoY + 55, 60, 45, 20, 20);
-            
-            g2.setColor(new Color(150, 180, 210));
-            g2.setFont(new Font("Segoe UI", Font.PLAIN, 9));
-            g2.drawString("FOTO 3x4", fotoX + 22, fotoY + 115);
+
+            if (fotoPdfPreview != null) {
+                Shape oldClip = g2.getClip();
+                g2.setClip(new RoundRectangle2D.Float(fotoX + 3, fotoY + 3, fotoW - 6, fotoH - 6, 8, 8));
+                g2.drawImage(fotoPdfPreview, fotoX + 3, fotoY + 3, fotoW - 6, fotoH - 6, null);
+                g2.setClip(oldClip);
+            } else {
+                g2.setColor(new Color(80, 120, 160));
+                g2.fillOval(fotoX + 30, fotoY + 15, 35, 35);
+                g2.fillRoundRect(fotoX + 18, fotoY + 55, 60, 45, 20, 20);
+
+                g2.setColor(new Color(150, 180, 210));
+                g2.setFont(new Font("Segoe UI", Font.PLAIN, 9));
+                g2.drawString("TANPA FOTO", fotoX + 17, fotoY + 115);
+            }
             
             // === FOOTER ===
             // Garis pemisah bawah

@@ -1,5 +1,6 @@
 package librarymanagement.model;
 
+import librarymanagement.util.AnggotaPhotoUtil;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,7 @@ public class AnggotaModel {
     private String nama;
     private String alamat;
     private String noHp;
+    private String fotoPdfPath;
     private String status;
     
     // ============================================================
@@ -23,11 +25,12 @@ public class AnggotaModel {
     // ============================================================
     public AnggotaModel() {}
     
-    public AnggotaModel(int idAnggota, String nama, String alamat, String noHp, String status) {
+    public AnggotaModel(int idAnggota, String nama, String alamat, String noHp, String fotoPdfPath, String status) {
         this.idAnggota = idAnggota;
         this.nama      = nama;
         this.alamat    = alamat;
         this.noHp      = noHp;
+        this.fotoPdfPath = fotoPdfPath;
         this.status    = status;
     }
     
@@ -45,6 +48,9 @@ public class AnggotaModel {
     
     public String getNoHp()              { return noHp; }
     public void setNoHp(String noHp)     { this.noHp = noHp; }
+
+    public String getFotoPdfPath()               { return fotoPdfPath; }
+    public void setFotoPdfPath(String fotoPdfPath) { this.fotoPdfPath = fotoPdfPath; }
     
     public String getStatus()                { return status; }
     public void setStatus(String status)     { this.status = status; }
@@ -151,13 +157,23 @@ public class AnggotaModel {
      * Tambah anggota baru
      */
     public boolean addAnggota(AnggotaModel anggota) {
-        String sql = "INSERT INTO anggota (nama, alamat, no_hp, status) VALUES (?,?,?,?)";
-        try (PreparedStatement ps = getConn().prepareStatement(sql)) {
+        String sql = "INSERT INTO anggota (nama, alamat, no_hp, foto_pdf_path, status) VALUES (?,?,?,?,?)";
+        try (PreparedStatement ps = getConn().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, anggota.getNama());
             ps.setString(2, anggota.getAlamat());
             ps.setString(3, anggota.getNoHp());
-            ps.setString(4, anggota.getStatus());
-            return ps.executeUpdate() > 0;
+            ps.setString(4, anggota.getFotoPdfPath());
+            ps.setString(5, anggota.getStatus());
+
+            if (ps.executeUpdate() > 0) {
+                try (ResultSet generatedKeys = ps.getGeneratedKeys()) {
+                    if (generatedKeys.next()) {
+                        anggota.setIdAnggota(generatedKeys.getInt(1));
+                    }
+                }
+                return true;
+            }
+            return false;
         } catch (SQLException e) {
             System.err.println("Error addAnggota: " + e.getMessage());
             return false;
@@ -168,16 +184,29 @@ public class AnggotaModel {
      * Update anggota
      */
     public boolean updateAnggota(AnggotaModel anggota) {
-        String sql = "UPDATE anggota SET nama=?, alamat=?, no_hp=?, status=? WHERE id_anggota=?";
+        String sql = "UPDATE anggota SET nama=?, alamat=?, no_hp=?, foto_pdf_path=?, status=? WHERE id_anggota=?";
         try (PreparedStatement ps = getConn().prepareStatement(sql)) {
             ps.setString(1, anggota.getNama());
             ps.setString(2, anggota.getAlamat());
             ps.setString(3, anggota.getNoHp());
-            ps.setString(4, anggota.getStatus());
-            ps.setInt(5, anggota.getIdAnggota());
+            ps.setString(4, anggota.getFotoPdfPath());
+            ps.setString(5, anggota.getStatus());
+            ps.setInt(6, anggota.getIdAnggota());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("Error updateAnggota: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean updateFotoPath(int idAnggota, String fotoPdfPath) {
+        String sql = "UPDATE anggota SET foto_pdf_path=? WHERE id_anggota=?";
+        try (PreparedStatement ps = getConn().prepareStatement(sql)) {
+            ps.setString(1, fotoPdfPath);
+            ps.setInt(2, idAnggota);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("Error updateFotoPath: " + e.getMessage());
             return false;
         }
     }
@@ -186,6 +215,12 @@ public class AnggotaModel {
      * Hapus anggota
      */
     public boolean deleteAnggota(int id) {
+        String fotoPath = null;
+        AnggotaModel existing = getAnggotaById(id);
+        if (existing != null) {
+            fotoPath = existing.getFotoPdfPath();
+        }
+
         // Cek apakah anggota masih memiliki peminjaman aktif
         String checkSql = "SELECT COUNT(*) FROM peminjaman WHERE id_anggota = ? AND status = 'Dipinjam'";
         try (PreparedStatement ps = getConn().prepareStatement(checkSql)) {
@@ -201,7 +236,11 @@ public class AnggotaModel {
         String sql = "DELETE FROM anggota WHERE id_anggota = ?";
         try (PreparedStatement ps = getConn().prepareStatement(sql)) {
             ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
+            boolean deleted = ps.executeUpdate() > 0;
+            if (deleted && fotoPath != null && !fotoPath.trim().isEmpty()) {
+                AnggotaPhotoUtil.deleteStoredPdf(fotoPath);
+            }
+            return deleted;
         } catch (SQLException e) {
             System.err.println("Error deleteAnggota: " + e.getMessage());
             return false;
@@ -251,6 +290,7 @@ public class AnggotaModel {
             rs.getString("nama"),
             rs.getString("alamat"),
             rs.getString("no_hp"),
+            rs.getString("foto_pdf_path"),
             rs.getString("status")
         );
     }

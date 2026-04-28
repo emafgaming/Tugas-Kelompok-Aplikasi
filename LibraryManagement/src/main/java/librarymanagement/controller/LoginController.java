@@ -3,6 +3,7 @@ package librarymanagement.controller;
 import librarymanagement.model.UserModel;
 import librarymanagement.view.Dashboard;
 import librarymanagement.view.LoginForm;
+import java.awt.Component;
 import javax.swing.JOptionPane;
 
 /**
@@ -64,6 +65,7 @@ public class LoginController {
                         "  • Melihat laporan\n\n" +
                         "❌ Yang TIDAK bisa dilakukan:\n" +
                         "  • Tambah, Edit, Hapus data\n" +
+                        "  • Kembalikan buku atau proses denda\n" +
                         "  • Semua tombol CRUD dinonaktifkan\n\n" +
                         "💡 Tertarik dengan sistem ini?\n" +
                         "   Klik menu 'Hubungi Developer' untuk info lebih lanjut!",
@@ -144,5 +146,21 @@ public class LoginController {
      */
     public static boolean isDemo() {
         return currentUser != null && currentUser.isDemo();
+    }
+
+    public static boolean ensureNotDemo(Component parent, String featureName) {
+        if (!isDemo()) {
+            return true;
+        }
+
+        String targetFeature = (featureName == null || featureName.trim().isEmpty())
+            ? "Fitur ini"
+            : featureName;
+
+        JOptionPane.showMessageDialog(parent,
+            targetFeature + " tidak tersedia di akun demo.\n\n" +
+            "Silakan login menggunakan akun admin atau petugas untuk menggunakan fitur ini.",
+            "Mode Demo", JOptionPane.INFORMATION_MESSAGE);
+        return false;
     }
 }

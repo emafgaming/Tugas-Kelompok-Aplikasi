@@ -77,6 +77,10 @@ public class PeminjamanController {
      * Proses peminjaman buku
      */
     public void pinjam() {
+        if (!LoginController.ensureNotDemo(view, "Fitur peminjaman")) {
+            return;
+        }
+
         // Validasi
         if (view.getSelectedAnggotaId() <= 0) {
             JOptionPane.showMessageDialog(view, "Pilih anggota!", "Validasi", JOptionPane.WARNING_MESSAGE);
@@ -152,6 +156,10 @@ public class PeminjamanController {
      * Proses pengembalian buku
      */
     public void kembalikan(int idPinjam) {
+        if (!LoginController.ensureNotDemo(view, "Fitur kembalikan buku")) {
+            return;
+        }
+
         if (idPinjam <= 0) {
             JOptionPane.showMessageDialog(view, 
                 "Pilih data peminjaman yang akan dikembalikan!", 
@@ -221,6 +229,10 @@ public class PeminjamanController {
      * Proses lapor buku hilang
      */
     public void laporHilang(int idPinjam) {
+        if (!LoginController.ensureNotDemo(view, "Fitur lapor buku hilang")) {
+            return;
+        }
+
         if (idPinjam <= 0) {
             JOptionPane.showMessageDialog(view, 
                 "Pilih data peminjaman yang akan dilaporkan hilang!", 

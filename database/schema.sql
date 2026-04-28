@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS anggota (
     nama       TEXT    NOT NULL,
     alamat     TEXT,
     no_hp      TEXT,
+    foto_pdf_path TEXT,
     status     TEXT    NOT NULL DEFAULT 'Aktif' CHECK(status IN ('Aktif','Tidak Aktif'))
 );
 
