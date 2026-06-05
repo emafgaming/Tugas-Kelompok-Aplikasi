@@ -19,12 +19,19 @@ public class DatabaseConnection {
     // Simpan database di folder HOME user agar selalu bisa diakses
     private static final String DB_FOLDER;
     private static final String DB_URL;
+    private static final String DB_USER;
+    private static final String DB_PASSWORD;
+    private static final boolean USE_SUPABASE;
 
     static {
-        // Gunakan folder home user agar path selalu absolute & konsisten
+        String supabaseUrl = getConfig("SUPABASE_DB_URL");
+        USE_SUPABASE = supabaseUrl != null && !supabaseUrl.trim().isEmpty();
+        DB_USER = getConfig("SUPABASE_DB_USER");
+        DB_PASSWORD = getConfig("SUPABASE_DB_PASSWORD");
+
         String home = System.getProperty("user.home");
         DB_FOLDER = home + File.separator + "perpustakaan_db";
-        DB_URL = "jdbc:sqlite:" + DB_FOLDER + File.separator + "perpustakaan.db";
+        DB_URL = USE_SUPABASE ? supabaseUrl : "jdbc:sqlite:" + DB_FOLDER + File.separator + "perpustakaan.db";
         System.out.println(">>> Database path: " + DB_URL);
     }
 
@@ -42,7 +49,7 @@ public class DatabaseConnection {
     public Connection getConnection() {
         try {
             if (connection == null || connection.isClosed()) {
-                connection = DriverManager.getConnection(DB_URL);
+                connection = openConnection();
             }
         } catch (SQLException e) {
             System.err.println("Error mendapatkan koneksi: " + e.getMessage());
@@ -51,6 +58,11 @@ public class DatabaseConnection {
     }
 
     private void initDatabase() {
+        if (USE_SUPABASE) {
+            initSupabaseDatabase();
+            return;
+        }
+
         File dbFolder = new File(DB_FOLDER);
         if (!dbFolder.exists()) {
             boolean created = dbFolder.mkdirs();
@@ -71,6 +83,50 @@ public class DatabaseConnection {
         } catch (SQLException e) {
             System.err.println(">>> ERROR inisialisasi database: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    private static String getConfig(String key) {
+        String value = System.getProperty(key);
+        if (value == null || value.trim().isEmpty()) {
+            value = System.getenv(key);
+        }
+        return value;
+    }
+
+    private Connection openConnection() throws SQLException {
+        if (USE_SUPABASE && DB_USER != null && !DB_USER.trim().isEmpty()) {
+            return DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+        }
+        return DriverManager.getConnection(DB_URL);
+    }
+
+    private void initSupabaseDatabase() {
+        try {
+            Class.forName("org.postgresql.Driver");
+            connection = openConnection();
+            validateSupabaseSchema();
+            System.out.println(">>> Koneksi Supabase PostgreSQL berhasil!");
+        } catch (ClassNotFoundException e) {
+            System.err.println(">>> ERROR: Driver PostgreSQL tidak ditemukan!");
+            System.err.println(">>> Jalankan Maven install agar dependency org.postgresql:postgresql terpasang.");
+            e.printStackTrace();
+        } catch (SQLException e) {
+            System.err.println(">>> ERROR koneksi Supabase: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void validateSupabaseSchema() {
+        String sql = "SELECT to_regclass('public.users') IS NOT NULL AS schema_ready";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next() && !rs.getBoolean("schema_ready")) {
+                System.err.println(">>> Supabase terhubung, tapi tabel belum ditemukan.");
+                System.err.println(">>> Jalankan database/supabase_schema.sql di Supabase SQL Editor.");
+            }
+        } catch (SQLException e) {
+            System.err.println("Warning: gagal memeriksa schema Supabase: " + e.getMessage());
         }
     }
 
